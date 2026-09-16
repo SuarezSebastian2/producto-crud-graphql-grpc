@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+option csharp_namespace = "GrpcProductoApi.Protos";
+
+import "google/protobuf/empty.proto";
+
+package producto;
+
+// Servicio gRPC para gestionar productos (operaciones CRUD).
+service ProductoService {
+  rpc Create (ProductoInput) returns (ProductoMessage);
+  rpc Get (ProductoId) returns (ProductoMessage);
+  rpc Update (ProductoUpdateInput) returns (ProductoMessage);
+  rpc Delete (ProductoId) returns (google.protobuf.Empty);
+  rpc List (google.protobuf.Empty) returns (ProductosList);
+}
+
+// Representa un producto ya persistido (incluye id).
+message ProductoMessage {
+  int32 id = 1;
+  string nombre = 2;
+  string descripcion = 3;
+  double precio = 4;
+}
+
+// Datos requeridos para crear un producto (sin id, lo asigna la BD).
+message ProductoInput {
+  string nombre = 1;
+  string descripcion = 2;
+  double precio = 3;
+}
+
+// Datos requeridos para actualizar un producto existente.
+message ProductoUpdateInput {
+  int32 id = 1;
+  string nombre = 2;
+  string descripcion = 3;
+  double precio = 4;
+}
+
+// Identificador usado para Get y Delete.
+message ProductoId {
+  int32 id = 1;
+}
+
+// Lista de productos, usada en List.
+message ProductosList {
+  repeated ProductoMessage items = 1;
+}
