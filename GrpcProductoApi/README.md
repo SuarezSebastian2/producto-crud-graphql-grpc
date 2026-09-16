@@ -15,52 +15,30 @@ GrpcProductoApi/
 └── Program.cs                         # Configuración y arranque
 ```
 
-## 1. Requisitos
 
-- .NET 8 SDK
-- Una cuenta gratuita en [Supabase](https://supabase.com) (PostgreSQL en la nube)
-- Cliente gRPC para pruebas: Postman (soporta gRPC nativamente) o `grpcurl`
+## Cómo levantarla
 
-## 2. Crear el proyecto en Supabase
+Necesitas el SDK de .NET 8, un proyecto en Supabase, y un cliente gRPC para
+probar (Postman ya soporta gRPC nativamente, o puedes usar grpcurl).
 
-Crea un **segundo proyecto de Supabase** (independiente del de GraphQL), por
-ejemplo llamado `producto-grpc`, siguiendo los mismos pasos: New Project → nombre
-→ contraseña de base de datos → región. Así cada API tiene su propia base,
-igual que pedía la actividad con Azure SQL. Ve a **Project Settings → Database**
-para obtener el host de conexión (`db.xxxxxxxxxxxx.supabase.co`).
-
-## 3. Configurar la conexión
-
-Edita `appsettings.json` con los datos de este segundo proyecto de Supabase:
+1. Crea un segundo proyecto en Supabase (independiente del de GraphQL), por
+   ejemplo `producto-grpc`.
+2. Igual que en el proyecto GraphQL: "Connect" → "Direct" → "Session pooler",
+   copia los datos y pégalos en `appsettings.json`:
 
 ```json
-"DefaultConnection": "Host=db.TU-PROYECTO.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=TU-PASSWORD;SSL Mode=Require;Trust Server Certificate=true;"
+"DefaultConnection": "Host=aws-0-REGION.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.TU-PROJECT-REF;Password=TU-PASSWORD;SSL Mode=Require;Trust Server Certificate=true;"
 ```
 
-> Nota: se usa el **Session Pooler** de Supabase (host `aws-0-REGION.pooler.supabase.com`,
-> usuario `postgres.TU-PROJECT-REF`) en vez de la conexión directa, porque la
-> conexión directa es IPv6-only y muchas redes en Colombia solo soportan IPv4.
-
-## 4. Restaurar paquetes y crear la migración
-
-```bash
-cd GrpcProductoApi
+3. Restaura y migra:
 dotnet restore
 dotnet ef migrations add InitialCreate
-```
 
-Al igual que en el proyecto GraphQL, `Program.cs` aplica la migración
-automáticamente (`db.Database.Migrate()`) al arrancar.
 
-## 5. Ejecutar
+4. `dotnet run`. Queda escuchando en `http://localhost:5180` (tiene que ser
+   HTTP/2 para que gRPC funcione, ya está configurado así en `Program.cs`).
 
-```bash
-dotnet run
-```
-
-Por defecto queda escuchando en `http://localhost:5180` (HTTP/2, requerido por gRPC).
-
-## 6. Servicio definido (`producto.proto`)
+## El servicio (`producto.proto`)
 
 ```protobuf
 service ProductoService {
@@ -72,18 +50,17 @@ service ProductoService {
 }
 ```
 
-Cubre las 4 operaciones CRUD (`Create`, `Get`/`List`, `Update`, `Delete`).
+Los 5 métodos cubren el CRUD: `Create`, `Get` y `List` para leer, `Update` y
+`Delete` para escribir.
 
-## 7. Probar con Postman
+## Probando con Postman
 
-1. Nueva request → **gRPC Request**.
-2. URL del servidor: `localhost:5180`.
-3. Como el proyecto tiene `AddGrpcReflection()` habilitado en desarrollo,
-   Postman puede descubrir automáticamente el servicio y sus métodos
-   ("Use server reflection"). Si prefieres, también puedes importar
-   directamente `Protos/producto.proto`.
-4. Selecciona el método (`producto.ProductoService/Create`, `/Get`, `/Update`,
-   `/Delete`, `/List`) e invócalo con el mensaje en formato JSON, por ejemplo:
+1. Nueva request de tipo gRPC, servidor `localhost:5180`.
+2. El proyecto tiene reflexión habilitada (`AddGrpcReflection()`), así que
+   Postman detecta el servicio solo y te deja elegir el método de una lista,
+   sin tener que importar el `.proto` a mano.
+3. Elige el método (`producto.ProductoService/Create`, `/Get`, `/Update`,
+   `/Delete`, `/List`) y en el mensaje pon algo como:
 
 ```json
 {
@@ -93,18 +70,10 @@ Cubre las 4 operaciones CRUD (`Create`, `Get`/`List`, `Update`, `Delete`).
 }
 ```
 
-También puedes usar `grpcurl` desde la terminal:
+## Manejo de errores
 
-```bash
-grpcurl -plaintext -d '{"nombre":"Mouse","descripcion":"Inalámbrico","precio":85000}' \
-  localhost:5180 producto.ProductoService/Create
-```
-
-## 8. Manejo de errores
-
-Cada método usa `RpcException` con los códigos de estado propios de gRPC:
-
-- `InvalidArgument`: nombre vacío o precio negativo.
-- `NotFound`: producto inexistente en `Get`, `Update` o `Delete`.
-- `Internal`: errores no controlados (se registran con `ILogger` y no se
-  exponen detalles internos al cliente).
+Cada método devuelve un `RpcException` con el código correspondiente:
+`InvalidArgument` si el nombre viene vacío o el precio es negativo,
+`NotFound` si el producto no existe, y `Internal` para cualquier error que no
+se controle explícitamente (esos quedan registrados con `ILogger`, pero al
+cliente no le llega el detalle interno).

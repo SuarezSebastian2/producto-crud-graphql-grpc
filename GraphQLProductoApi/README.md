@@ -23,60 +23,46 @@ GraphQLProductoApi/
 - .NET 8 SDK
 - Una cuenta gratuita en [Supabase](https://supabase.com) (PostgreSQL en la nube)
 
-## 2. Crear el proyecto en Supabase
+## Cómo levantarla
 
-1. Entra a [supabase.com](https://supabase.com) e inicia sesión (puedes usar tu cuenta de GitHub).
-2. Clic en **New Project**. Ponle un nombre (ej. `producto-graphql`), define una
-   contraseña para la base de datos (guárdala, la necesitas ya) y elige la región
-   más cercana.
-3. Espera 1-2 minutos a que se aprovisione el proyecto.
-4. Ve a **Project Settings → Database**. Ahí encuentras el host de conexión, con
-   este formato: `db.xxxxxxxxxxxx.supabase.co`.
+Necesitas el SDK de .NET 8 y un proyecto en Supabase.
 
-## 3. Configurar la conexión
-
-Edita `appsettings.json` y reemplaza los valores de `ConnectionStrings:DefaultConnection`
-con los datos de tu proyecto de Supabase:
+1. Crea un proyecto en supabase.com (gratis). Cuando te pida la contraseña de la
+   base de datos, guárdala en ese momento, después no se puede volver a ver.
+2. En el proyecto, ve al botón "Connect" → "Direct" → pestaña "Session pooler" y
+   copia los datos (host, usuario, base). Usé el pooler y no la conexión directa
+   porque la directa solo resuelve por IPv6 y en mi red no me conectaba.
+3. En `appsettings.json`, reemplaza los valores de `ConnectionStrings:DefaultConnection`:
 
 ```json
-"DefaultConnection": "Host=db.TU-PROYECTO.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=TU-PASSWORD;SSL Mode=Require;Trust Server Certificate=true;"
+"DefaultConnection": "Host=aws-0-REGION.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.TU-PROJECT-REF;Password=TU-PASSWORD;SSL Mode=Require;Trust Server Certificate=true;"
 ```
 
-> Nota: se usa el **Session Pooler** de Supabase (host `aws-0-REGION.pooler.supabase.com`,
-> usuario `postgres.TU-PROJECT-REF`) en vez de la conexión directa (`db.xxx.supabase.co`),
-> porque la conexión directa es IPv6-only y muchas redes domésticas en Colombia
-> solo soportan IPv4. El pooler funciona igual de bien para este proyecto.
-
-> Recomendación: no subas tus credenciales reales a GitHub. Usa `dotnet user-secrets`
-> o variables de entorno en tu entrega final, y deja el `appsettings.json` del repo
-> con valores de ejemplo (como está aquí).
-
-## 4. Restaurar paquetes y crear la migración
-
-```bash
-cd GraphQLProductoApi
+4. Restaura y crea la migración:
 dotnet restore
-dotnet tool install --global dotnet-ef   # si no lo tienes instalado
 dotnet ef migrations add InitialCreate
+
+
+No hace falta correr `dotnet ef database update`, el `Program.cs` aplica la
+migración solo al arrancar.
+
+5. `dotnet run`. Por defecto queda en `http://localhost:5080/graphql`. Si abres esa
+   URL en el navegador te aparece Banana Cake Pop, el editor gráfico que trae
+   HotChocolate para probar queries sin salir del navegador.
+
+## Las 5 operaciones
+
+**Crear**
+```graphql
+mutation {
+  crearProducto(input: { nombre: "Teclado mecánico", descripcion: "Switches rojos", precio: 250000 }) {
+    id
+    nombre
+  }
+}
 ```
 
-No necesitas correr `dotnet ef database update` manualmente: `Program.cs` llama
-`db.Database.Migrate()` al arrancar, así que la tabla `Productos` se crea sola
-la primera vez que ejecutes la aplicación.
-
-## 5. Ejecutar
-
-```bash
-dotnet run
-```
-
-La consola mostrará la URL (por defecto `http://localhost:5080/graphql`).
-Al abrirla en el navegador aparece **Banana Cake Pop**, el IDE gráfico que
-HotChocolate incluye por defecto para probar consultas GraphQL.
-
-## 6. Operaciones disponibles (CRUD)
-
-**Listar productos**
+**Listar**
 ```graphql
 query {
   productos {
@@ -88,28 +74,19 @@ query {
 }
 ```
 
-**Obtener un producto**
+**Obtener por id**
 ```graphql
 query {
   producto(id: 1) {
     id
     nombre
+    descripcion
     precio
   }
 }
 ```
 
-**Crear producto**
-```graphql
-mutation {
-  crearProducto(input: { nombre: "Teclado mecánico", descripcion: "Switches rojos", precio: 250000 }) {
-    id
-    nombre
-  }
-}
-```
-
-**Actualizar producto**
+**Actualizar**
 ```graphql
 mutation {
   actualizarProducto(id: 1, input: { nombre: "Teclado mecánico RGB", descripcion: "Switches rojos", precio: 270000 }) {
@@ -120,23 +97,24 @@ mutation {
 }
 ```
 
-**Eliminar producto**
+**Eliminar**
 ```graphql
 mutation {
   eliminarProducto(id: 1)
 }
 ```
 
-## 7. Probar con Postman
+## Probando con Postman
 
-Postman soporta GraphQL de forma nativa: crea una request nueva, selecciona
-tipo **GraphQL**, apunta a `http://localhost:5080/graphql` y pega las
-queries/mutations de arriba en el editor.
+Postman tiene un tipo de request "GraphQL" nativo — apunta a
+`http://localhost:5080/graphql`, pega la query o mutation en el editor, y le das
+Send.
 
-## 8. Manejo de errores
+## Manejo de errores
 
-- Validaciones de negocio (nombre vacío, precio negativo) lanzan `GraphQLException`
-  con código `VALIDATION_ERROR`.
-- Un producto no encontrado lanza `GraphQLException` con código `PRODUCTO_NOT_FOUND`.
-- `GraphQLErrorFilter` intercepta excepciones no controladas (p. ej. de EF Core)
-  y evita exponer detalles internos al cliente.
+Si el nombre viene vacío o el precio es negativo, la mutation lanza una
+`GraphQLException` con código `VALIDATION_ERROR`. Si pides un producto que no
+existe, lanza `PRODUCTO_NOT_FOUND`. Cualquier otra excepción que se me haya
+escapado (por ejemplo algo de la base de datos) la intercepta
+`GraphQLErrorFilter` para no mostrar detalles internos al cliente.
+
